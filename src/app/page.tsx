@@ -1,103 +1,166 @@
-import Image from "next/image";
+'use client';
+import { useState, useRef } from 'react';
+import hljs from 'highlight.js/lib/core';
+import 'highlight.js/styles/github.css';
+
+// Đăng ký ngôn ngữ m3u8 tùy chỉnh
+hljs.registerLanguage('m3u8', () => {
+  return {
+    case_insensitive: true,
+    keywords: {
+      keyword:
+        '#EXTM3U #EXTINF #EXT-X-VERSION #EXT-X-TARGETDURATION #EXT-X-MEDIA-SEQUENCE #EXT-X-ENDLIST',
+    },
+    contains: [
+      {
+        className: 'string',
+        begin: /".*?"/,
+      },
+      {
+        className: 'comment',
+        begin: /^#(?![EXT])/,
+        end: /$/,
+      },
+      {
+        className: 'url',
+        begin: /(http|https):\/\/[^\s]+/,
+      },
+      {
+        className: 'segment',
+        begin: /\.ts|\.m3u8$/,
+      },
+    ],
+  };
+});
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [url, setUrl] = useState('');
+  const [referer, setReferer] = useState('');
+  const [userAgent, setUserAgent] = useState('');
+  const [content, setContent] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const contentRef = useRef<HTMLPreElement>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setContent('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/fetch-m3u8', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, referer, userAgent }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setContent(data.content);
+      }
+    } catch (err) {
+      setError('An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm tải nội dung dưới dạng file .txt
+  const handleDownload = () => {
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'playlist.m3u8.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const highlightedContent = content
+    ? hljs.highlight(content, { language: 'm3u8' }).value
+    : '';
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-start p-4 pt-8">
+      <h1 className="text-3xl font-bold mb-6">M3U8 Playlist Fetcher</h1>
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg bg-white p-6 rounded-lg shadow-md"
+      >
+        <div className="mb-4">
+          <label htmlFor="url" className="block text-sm font-medium text-gray-700">
+            M3U8 URL
+          </label>
+          <input
+            id="url"
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            required
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            placeholder="https://example.com/playlist.m3u8"
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+        <div className="mb-4">
+          <label htmlFor="referer" className="block text-sm font-medium text-gray-700">
+            Referer (optional)
+          </label>
+          <input
+            id="referer"
+            type="url"
+            value={referer}
+            onChange={(e) => setReferer(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            placeholder="https://example.com"
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+        </div>
+        <div className="mb-4">
+          <label htmlFor="userAgent" className="block text-sm font-medium text-gray-700">
+            User-Agent (optional)
+          </label>
+          <input
+            id="userAgent"
+            type="text"
+            value={userAgent}
+            onChange={(e) => setUserAgent(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:opacity-50"
         >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
+          {loading ? 'Fetching...' : 'Fetch Playlist'}
+        </button>
+      </form>
+
+      {error && <p className="mt-4 text-red-500">{error}</p>}
+
+      {content && (
+        <div className="mt-6 w-full max-w-2xl">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-xl font-semibold">Playlist Content</h2>
+            <button
+              onClick={handleDownload}
+              className="text-sm bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
+            >
+              Download .txt
+            </button>
+          </div>
+          {/* Khử scroll bằng cách bỏ max-h và dùng whitespace-pre-wrap */}
+          <pre
+            ref={contentRef}
+            className="bg-white p-4 rounded-lg shadow-md overflow-x-auto whitespace-pre-wrap font-mono text-sm"
+            dangerouslySetInnerHTML={{ __html: highlightedContent }}
           />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        </div>
+      )}
     </div>
   );
 }
